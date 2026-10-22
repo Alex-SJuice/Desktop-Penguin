@@ -5,7 +5,7 @@ A penguin that waddles around your desktop
 
 Terra Week #1
 
-## Features
+## Features (Possible)
 
  - top down view
  - randomly wanders around the screen
@@ -14,5 +14,13 @@ Terra Week #1
 
 ### Maybe
 
- - procedural feet and flappers
  - footprint effects 
+ - diving animation
+ - friends?
+
+## Godot Demo Features
+
+ - top down view
+ - randomly wanders around the screen
+ - flingable
+ - is penguin
