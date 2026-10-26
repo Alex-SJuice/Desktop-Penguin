@@ -99,3 +99,6 @@ func random_direction (low, high):
 	var rand = randf_range(low, high)
 	direction = Vector2(cos(rand), sin(rand))
 	rotation = atan2(direction.y, direction.x)
+func reflect_direction (normal):
+	direction.reflect(normal)
+	rotation = atan2(direction.y, direction.x)

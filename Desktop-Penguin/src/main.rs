@@ -1,30 +1,53 @@
 use raylib::prelude::*;
-use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
-use windows::Win32::Foundation::POINT;
+use raylib::consts::MouseButton;
+// use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+// use windows::Win32::Foundation::POINT;
+use penguin::Penguin;
+
+mod penguin;
 
 fn main() {
+    let window_size = Vector2::new(100.0, 100.0);
+
     let mut position = Vector2::new(100.0, 100.0);
-    let mut velocity = Vector2::new(0.0, 0.0); // pixels/second
-    let mut angular_velocity = 0.0;
+
+    let mut target_velocity = Vector2::new(50.0, 0.0);
+    let mut velocity = Vector2::ZERO; // pixels/second
+
+    let mut target_direction = 0.0;
     let mut direction = 0.0;
+    let mut previous_direction = 0.0;
+    let mut angular_velocity = 0.0; // radians/second
 
-    let sprite_center = Vector2::new(50.0, 50.0);
-    let mut torso_position = Vector2::new(0.0, 0.0);
-    let mut head_position = Vector2::new(-23.0, -15.0);
-    let mut right_foot_position = Vector2::new(-5.0, 45.0);
-    let mut left_foot_position = Vector2::new(32.0, 35.0);
+    let mut grabbed = false;
+    let mut grab_offset = Vector2::ZERO;
 
-    let mut right_foot_target = Vector2::new(-5.0, 40.0);
-    let mut left_foot_target = Vector2::new(32.0, 40.0);  
+    let mut flying = false;
+
+    let mut sprite = Penguin::new(
+        Vector2::new(50.0, 50.0),   //sprite_center
+        Vector2::new(0.0, 0.0),     //torso_position
+        Vector2::new(-23.0, -15.0), //head_position
+
+        Vector2::new(-5.0, 45.0),   //right_foot_position
+        Vector2::new(32.0, 35.0),   //left_foot_position
+        Vector2::new(-5.0, 40.0),   //right_foot_target
+        Vector2::new(32.0, 40.0),   //left_foot_target
+
+        0.06,                       //foot_scale
+        0.08,                       //torso_scale
+        0.13                        //head_scale
+    );
 
 
     let (mut rl, thread) = raylib::init()
-        .size(100,100)
-        .title("pet")
+        .size(window_size.x as i32, window_size.y as i32)
+        .title("panguin")
         .transparent()
         .undecorated()
         .topmost()
-        //.mouse_passthrough()
+        .msaa_4x()
+        .vsync()
         .borderless_windowed_mode()
         .build();
 
@@ -34,69 +57,57 @@ fn main() {
             get_monitor_height(get_current_monitor_index()) as f32
         );
 
-    let mut foot_image = Image::load_image("foot.png").unwrap();
-    let mut torso_image = Image::load_image("torso.png").unwrap();
-    let mut head_image = Image::load_image("head.png").unwrap();
-
-    let foot_texture = rl.load_texture_from_image(&thread, &foot_image).unwrap();
-    let torso_texture = rl.load_texture_from_image(&thread, &torso_image).unwrap();
-    let head_texture = rl.load_texture_from_image(&thread, &head_image).unwrap();
+    sprite.load_textures(&mut rl, &thread, "foot.png", "torso.png", "head.png");
 
     while !rl.window_should_close() {
-        let mut mouse_position = POINT{ x:0, y:0 };
-        unsafe {
-            GetCursorPos(&mut mouse_position).unwrap();
+        target_direction = (rl.get_time() / 30.0).sin() as f32* 2.0 * PI as f32;
+        target_velocity = from_angle(target_direction).scale(50.0);
+
+        if rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT) && !grabbed {
+            grabbed = true;
+            grab_offset = rl.get_mouse_position();
+        } 
+        if !rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT) && grabbed {
+            grabbed = false;
+            velocity += (rl.get_mouse_position() - grab_offset).normalize().scale(1000.0);
         }
 
-        let mouse_position = Vector2::new(mouse_position.x as f32, mouse_position.y as f32);
+        if !grabbed { // update position velocity and direction from angular velocity
+            angular_velocity = 
+                from_angle(direction + PI as f32 / 2.0).angle(from_angle(target_direction));
 
-        angular_velocity = 
-            from_angle(direction + PI as f32 / 2.0).angle(mouse_position - position - sprite_center) * 100.0;
+            previous_direction = direction;
+            direction += angular_velocity * rl.get_frame_time();
+            if direction > 2.0 * PI as f32 {
+                direction -= 2.0 * PI as f32;
+            }
+            if direction < 0.0 {
+                direction += 2.0 * PI as f32;
+            }
 
-        direction += angular_velocity * rl.get_frame_time();
-        if direction > 2.0 * PI as f32 {
-            direction -= 2.0 * PI as f32;
+            velocity *= 0.999;
+            velocity += (target_velocity - velocity).normalize().scale(10.0);
+
+
+            position += velocity.scale(rl.get_frame_time());
+            position.x = position.x.clamp(0.0, screen_dimensions.x - window_size.x);
+            position.y = position.y.clamp(0.0, screen_dimensions.y - window_size.y);
+
+            sprite.rotate(angular_velocity * rl.get_frame_time());
+            sprite.move_feet_constrained(velocity.scale(rl.get_frame_time())); 
+        } else {
+            position += rl.get_mouse_position() - grab_offset;
         }
-        if direction < 0.0 {
-            direction += 2.0 * PI as f32;
-        }
 
-        velocity = from_angle(direction + PI as f32 / 2.0).scale(50.0);
-
-        position += velocity.scale(rl.get_frame_time());
-        position.x = position.x.clamp(0.0, screen_dimensions.x - 100.0);
-        position.y = position.y.clamp(0.0, screen_dimensions.y - 100.0);
-
-        torso_position = rotate_about_point(torso_position, sprite_center, angular_velocity * rl.get_frame_time());
-        head_position = rotate_about_point(head_position, sprite_center, angular_velocity * rl.get_frame_time());
-        left_foot_position = rotate_about_point(left_foot_position, sprite_center, angular_velocity * rl.get_frame_time());
-        right_foot_position = rotate_about_point(right_foot_position, sprite_center, angular_velocity * rl.get_frame_time());
-        left_foot_target = rotate_about_point(left_foot_target, sprite_center, angular_velocity * rl.get_frame_time());
-        right_foot_target = rotate_about_point(right_foot_target, sprite_center, angular_velocity * rl.get_frame_time());
-        
-       
-
-        left_foot_position -= velocity.scale(rl.get_frame_time());
-        right_foot_position -= velocity.scale(rl.get_frame_time());
-
-        if left_foot_position.distance(left_foot_target) > 10.0 {
-            left_foot_position = left_foot_target + velocity.normalize().multiply(Vector2::new(10.0, 10.0));
-        }
-        if right_foot_position.distance(right_foot_target) > 10.0 {
-            right_foot_position = right_foot_target + velocity.normalize().multiply(Vector2::new(10.0, 10.0));
-        }
-        
         rl.set_window_position(position.x as i32, position.y as i32);
+        
+        { // begin drawing
+            let mut draw_handle = rl.begin_drawing(&thread);
 
-        {
-            let mut d = rl.begin_drawing(&thread);
-
-            d.clear_background(Color::new(0,0,0,0));
-            d.draw_texture_ex(&foot_texture, left_foot_position, direction * 180.0 / PI as f32, 0.06, Color::WHITE);
-            d.draw_texture_ex(&foot_texture, right_foot_position, direction * 180.0 / PI as f32, 0.06, Color::WHITE);
-            d.draw_texture_ex(&torso_texture, torso_position, direction * 180.0 / PI as f32, 0.08, Color::WHITE);
-            d.draw_texture_ex(&head_texture, head_position, direction * 180.0 / PI as f32, 0.13, Color::WHITE);
-            
+            draw_handle.clear_background(Color::new(0,0,0,0));
+            sprite.draw(&mut draw_handle, direction);
+            // draw_handle.draw_line_v(sprite.get_sprite_center(), sprite.get_sprite_center() + velocity, Color::RED);
+            // draw_handle.draw_line_v(sprite.get_sprite_center(), sprite.get_sprite_center() + target_velocity, Color::GREEN);
         }
     }
 }
