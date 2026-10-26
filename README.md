@@ -5,8 +5,8 @@ A penguin that waddles around your desktop
 
 Terra Week #1
 
-[rust](devlogs\2026-10-25-2)
-[godot](devlogs\2026-10-21)
+![rust](devlogs/2026-10-25-2.png)
+![godot](devlogs/2026-10-21.png)
 
 [LATEST RELEASE](https://github.com/Alex-SJuice/Desktop-Penguin/releases/tag/v1.0.0)
 
