@@ -1,5 +1,10 @@
-use raylib::prelude::*;
+#![cfg_attr(
+    all(target_os = "windows", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
+
 use raylib::consts::MouseButton;
+use raylib::prelude::*;
 // use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
 // use windows::Win32::Foundation::POINT;
 use penguin::Penguin;
@@ -28,17 +33,14 @@ fn main() {
         Vector2::new(50.0, 50.0),   //sprite_center
         Vector2::new(0.0, 0.0),     //torso_position
         Vector2::new(-23.0, -15.0), //head_position
-
         Vector2::new(-5.0, 45.0),   //right_foot_position
         Vector2::new(32.0, 35.0),   //left_foot_position
         Vector2::new(-5.0, 40.0),   //right_foot_target
         Vector2::new(32.0, 40.0),   //left_foot_target
-
         0.06,                       //foot_scale
         0.08,                       //torso_scale
-        0.13                        //head_scale
+        0.13,                       //head_scale
     );
-
 
     let (mut rl, thread) = raylib::init()
         .size(window_size.x as i32, window_size.y as i32)
@@ -51,29 +53,31 @@ fn main() {
         .borderless_windowed_mode()
         .build();
 
-    let screen_dimensions = 
-        Vector2::new(
-            get_monitor_width(get_current_monitor_index()) as f32, 
-            get_monitor_height(get_current_monitor_index()) as f32
-        );
+    let screen_dimensions = Vector2::new(
+        get_monitor_width(get_current_monitor_index()) as f32,
+        get_monitor_height(get_current_monitor_index()) as f32,
+    );
 
     sprite.load_textures(&mut rl, &thread, "foot.png", "torso.png", "head.png");
 
     while !rl.window_should_close() {
-        target_direction = (rl.get_time() / 30.0).sin() as f32* 2.0 * PI as f32;
+        target_direction = (rl.get_time() / 30.0).sin() as f32 * 2.0 * PI as f32;
         target_velocity = from_angle(target_direction).scale(50.0);
 
         if rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT) && !grabbed {
             grabbed = true;
             grab_offset = rl.get_mouse_position();
-        } 
+        }
         if !rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT) && grabbed {
             grabbed = false;
-            velocity += (rl.get_mouse_position() - grab_offset).normalize().scale(1000.0);
+            velocity += (rl.get_mouse_position() - grab_offset)
+                .normalize()
+                .scale(1000.0);
         }
 
-        if !grabbed { // update position velocity and direction from angular velocity
-            angular_velocity = 
+        if !grabbed {
+            // update position velocity and direction from angular velocity
+            angular_velocity =
                 from_angle(direction + PI as f32 / 2.0).angle(from_angle(target_direction));
 
             previous_direction = direction;
@@ -88,23 +92,23 @@ fn main() {
             velocity *= 0.999;
             velocity += (target_velocity - velocity).normalize().scale(10.0);
 
-
             position += velocity.scale(rl.get_frame_time());
             position.x = position.x.clamp(0.0, screen_dimensions.x - window_size.x);
             position.y = position.y.clamp(0.0, screen_dimensions.y - window_size.y);
 
             sprite.rotate(angular_velocity * rl.get_frame_time());
-            sprite.move_feet_constrained(velocity.scale(rl.get_frame_time())); 
+            sprite.move_feet_constrained(velocity.scale(rl.get_frame_time()));
         } else {
             position += rl.get_mouse_position() - grab_offset;
         }
 
         rl.set_window_position(position.x as i32, position.y as i32);
-        
-        { // begin drawing
+
+        {
+            // begin drawing
             let mut draw_handle = rl.begin_drawing(&thread);
 
-            draw_handle.clear_background(Color::new(0,0,0,0));
+            draw_handle.clear_background(Color::new(0, 0, 0, 0));
             sprite.draw(&mut draw_handle, direction);
             // draw_handle.draw_line_v(sprite.get_sprite_center(), sprite.get_sprite_center() + velocity, Color::RED);
             // draw_handle.draw_line_v(sprite.get_sprite_center(), sprite.get_sprite_center() + target_velocity, Color::GREEN);
@@ -113,7 +117,7 @@ fn main() {
 }
 
 fn rotate_about_point(target: Vector2, center: Vector2, angle: f32) -> Vector2 {
-    let mut transformed  = target - center;
+    let mut transformed = target - center;
     transformed = transformed.rotate(angle);
     transformed + center
 }

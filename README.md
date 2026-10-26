@@ -5,22 +5,29 @@ A penguin that waddles around your desktop
 
 Terra Week #1
 
-## Features (Possible)
+[rust](devlogs\2026-10-25-2)
+[godot](devlogs\2026-10-21)
+
+[LATEST RELEASE](https://github.com/Alex-SJuice/Desktop-Penguin/releases/tag/v1.0.0)
+
+There's 2 versions:
+
+one's made in godot, and follows the (playground tutorial)[https://playground.hackclub.com/stardance/setup] from stardance.
+
+The other one's made with rust + raylib, entirely by scratch mostly because I didn't feel like figuring out procedural animation in godot.
+
+
+## Features
 
  - top down view
  - randomly wanders around the screen
- - randomly slides around on belly
  - procedural art
+ - flingable
+ - is penguin
 
 ### Maybe
 
  - footprint effects 
  - diving animation
  - friends?
-
-## Godot Demo Features
-
- - top down view
- - randomly wanders around the screen
- - flingable
- - is penguin
+ - randomly slides around on belly
