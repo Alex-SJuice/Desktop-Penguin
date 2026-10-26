@@ -14,7 +14,14 @@ There's 2 versions:
 
 one's made in godot, and follows the (playground tutorial)[https://playground.hackclub.com/stardance/setup] from stardance.
 
-The other one's made with rust + raylib, entirely by scratch mostly because I didn't feel like figuring out procedural animation in godot.
+The other one's made with rust + raylib, entirely from scratch mostly because I didn't feel like figuring out procedural animation in godot. It has some pretty cool physics schenanigans going on lol
+
+## How to run
+
+1. download the version of the program you want
+	- for the rust version, you'll have to get the images too
+2. run the executable
+3. enjoy!
 
 
 ## Features
