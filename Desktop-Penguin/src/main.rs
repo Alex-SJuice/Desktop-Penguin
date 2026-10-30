@@ -3,15 +3,18 @@
     windows_subsystem = "windows"
 )]
 
+use penguin::Penguin;
+use pid::PidController;
+use rand::prelude::*;
 use raylib::consts::MouseButton;
 use raylib::prelude::*;
-use penguin::Penguin;
-use pid::pid_controller;
-use rand::prelude::*;
+use behaviors::Pause;
+use behaviors::DirectionChange;
+use behaviors::build_randomizer;
 
+mod behaviors;
 mod penguin;
 mod pid;
-mod behaviors;
 
 fn main() {
     let window_size = Vector2::new(200.0, 200.0);
@@ -22,7 +25,7 @@ fn main() {
     let mut target_velocity = Vector2::new(50.0, 0.0);
     let mut velocity = Vector2::ZERO; // pixels/second
 
-    let mut direction_pid = pid_controller::new(0.1, 0.0, 2.0);
+    let mut direction_pid = PidController::new(0.1, 0.0, 2.0);
     let mut target_direction = 0.0;
     let mut direction = 0.0;
     let mut angular_velocity = 0.0; // radians/second
@@ -33,7 +36,11 @@ fn main() {
 
     let mut sliding = false;
 
-    let mut pause_timer = 0.0;
+    let pause_randomizer = build_randomizer(0.3);
+    let mut pause = Pause::new();
+
+    let direction_change_randomizer = build_randomizer(0.3);
+    let mut direction_change = DirectionChange::new();
 
     let mut sprite = Penguin::new(
         Vector2::new(50.0, 50.0),   //sprite_center
@@ -73,7 +80,7 @@ fn main() {
         }
         if corrected_direction < 0.0 {
             corrected_direction += 2.0 * PI as f32;
-        }       
+        }
 
         if rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT) && !grabbed {
             grabbed = true;
@@ -92,34 +99,32 @@ fn main() {
             if (rl.get_mouse_position() - last_moving_mouse_position).length() > 0.1 {
                 last_moving_mouse_position = rl.get_mouse_position();
             }
-        } else { // update position velocity and direction from angular velocity
-            //random direction change
-            if rl.get_time() % 1.0 < 0.01 && rand::rng().random_range(0..10) < 5 {
+        } else {
+            pause.update(rl.get_frame_time());
+            direction_change.update();
+
+            if rl.get_time() % 3.0 < 0.01 && pause.trigger(&pause_randomizer) {
+                target_velocity = from_angle(target_direction).scale(0.0);
+            }
+            if rl.get_time() % 3.0 < 0.01 && direction_change.trigger(&direction_change_randomizer) {
                 target_direction = rand::rng().random_range(0.0..2.0 * PI) as f32;
             }
-
-
-            if sliding {
-                target_velocity = from_angle(target_direction).scale(150.0);
-            } else {
-                target_velocity = from_angle(target_direction).scale(50.0);
-            }
-
-            //random pausing
-            if pause_timer > 0.0 {
-                pause_timer -= rl.get_frame_time();
-                if pause_timer < 0.0 {
-                    pause_timer = 0.0;
+            // update position velocity and direction from angular velocity
+            //random direction change
+            if !pause.running() {
+                if sliding {
+                    target_velocity = from_angle(target_direction).scale(150.0);
+                } else {
+                    target_velocity = from_angle(target_direction).scale(50.0);
                 }
             }
 
-            if rand::rng().random_range(0..10) < 3 {
-                pause_timer = rand::rng().random_range(1.0..3.0);
-                target_velocity = from_angle(target_direction).scale(0.0);
-            }
+            //random pausing
+            
 
             angular_velocity *= 0.99;
-            angular_velocity += direction_pid.update(from_angle(corrected_direction).angle(from_angle(target_direction)));
+            angular_velocity += direction_pid
+                .update(from_angle(corrected_direction).angle(from_angle(target_direction)));
 
             direction += angular_velocity * rl.get_frame_time();
             if direction > 2.0 * PI as f32 {
@@ -130,39 +135,48 @@ fn main() {
             }
 
             velocity *= 0.99;
-            velocity += 
-                from_angle(corrected_direction)
-                .scale( (target_velocity - velocity).normalize()
-                        .dot(from_angle(corrected_direction))
-                        * (target_velocity.length() - velocity.length()).clamp(0.0, 20.0));
+            velocity += from_angle(corrected_direction).scale(
+                (target_velocity - velocity)
+                    .normalize()
+                    .dot(from_angle(corrected_direction))
+                    * (target_velocity.length() - velocity.length()).clamp(0.0, 20.0),
+            );
 
             position += velocity.scale(rl.get_frame_time());
             if position.x < -waddle_bounds.0.x {
                 target_direction = rand::rng().random_range(0.0..2.0 * PI) as f32;
                 if velocity.dot(Vector2::new(1.0, 0.0)) < 0.0 {
-                    velocity -= Vector2::new(1.0, 0.0).scale(velocity.length() * velocity.angle(Vector2::new(1.0, 0.0)).cos());
+                    velocity -= Vector2::new(1.0, 0.0)
+                        .scale(velocity.length() * velocity.angle(Vector2::new(1.0, 0.0)).cos());
                 }
             }
             if position.x > screen_dimensions.x - waddle_bounds.1.x {
                 target_direction = rand::rng().random_range(0.0..2.0 * PI) as f32;
                 if velocity.dot(Vector2::new(-1.0, 0.0)) < 0.0 {
-                    velocity -= Vector2::new(-1.0, 0.0).scale(velocity.length() * velocity.angle(Vector2::new(-1.0, 0.0)).cos());
+                    velocity -= Vector2::new(-1.0, 0.0)
+                        .scale(velocity.length() * velocity.angle(Vector2::new(-1.0, 0.0)).cos());
                 }
             }
             if position.y < -waddle_bounds.0.y {
                 target_direction = rand::rng().random_range(0.0..2.0 * PI) as f32;
                 if velocity.dot(Vector2::new(0.0, 1.0)) < 0.0 {
-                    velocity -= Vector2::new(0.0, 1.0).scale(velocity.length() * velocity.angle(Vector2::new(0.0, 1.0)).cos());
+                    velocity -= Vector2::new(0.0, 1.0)
+                        .scale(velocity.length() * velocity.angle(Vector2::new(0.0, 1.0)).cos());
                 }
             }
             if position.y > screen_dimensions.y - waddle_bounds.1.y {
                 target_direction = rand::rng().random_range(0.0..2.0 * PI) as f32;
                 if velocity.dot(Vector2::new(0.0, -1.0)) < 0.0 {
-                    velocity -= Vector2::new(0.0, -1.0).scale(velocity.length() * velocity.angle(Vector2::new(0.0, -1.0)).cos());
+                    velocity -= Vector2::new(0.0, -1.0)
+                        .scale(velocity.length() * velocity.angle(Vector2::new(0.0, -1.0)).cos());
                 }
             }
-            position.x = position.x.clamp(-waddle_bounds.0.x, screen_dimensions.x - waddle_bounds.1.x);
-            position.y = position.y.clamp(-waddle_bounds.0.y, screen_dimensions.y - waddle_bounds.1.y);
+            position.x = position
+                .x
+                .clamp(-waddle_bounds.0.x, screen_dimensions.x - waddle_bounds.1.x);
+            position.y = position
+                .y
+                .clamp(-waddle_bounds.0.y, screen_dimensions.y - waddle_bounds.1.y);
 
             sprite.rotate(angular_velocity * rl.get_frame_time());
             if velocity.length() <= 100.0 {
@@ -178,8 +192,16 @@ fn main() {
 
             draw_handle.clear_background(Color::new(0, 0, 0, 0));
             sprite.draw(&mut draw_handle, direction);
-            draw_handle.draw_line_v(sprite.get_sprite_center(), sprite.get_sprite_center() + velocity, Color::RED);
-            draw_handle.draw_line_v(sprite.get_sprite_center(), sprite.get_sprite_center() + target_velocity, Color::GREEN);
+            draw_handle.draw_line_v(
+                sprite.get_sprite_center(),
+                sprite.get_sprite_center() + velocity,
+                Color::RED,
+            );
+            draw_handle.draw_line_v(
+                sprite.get_sprite_center(),
+                sprite.get_sprite_center() + target_velocity,
+                Color::GREEN,
+            );
         }
     }
 }
