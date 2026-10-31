@@ -10,6 +10,7 @@ use raylib::consts::MouseButton;
 use raylib::prelude::*;
 use behaviors::Pause;
 use behaviors::DirectionChange;
+use behaviors::Grab;
 use behaviors::build_randomizer;
 
 mod behaviors;
@@ -30,9 +31,7 @@ fn main() {
     let mut direction = 0.0;
     let mut angular_velocity = 0.0; // radians/second
 
-    let mut grabbed = false;
-    let mut grab_offset = Vector2::ZERO;
-    let mut last_moving_mouse_position = Vector2::ZERO;
+    let mut grab = Grab::new();
 
     let mut sliding = false;
 
@@ -74,43 +73,32 @@ fn main() {
     sprite.load_textures(&mut rl, &thread, "foot.png", "torso.png", "head.png");
 
     while !rl.window_should_close() {
-        let mut corrected_direction = direction + PI as f32 / 2.0;
-        if corrected_direction > 2.0 * PI as f32 {
-            corrected_direction -= 2.0 * PI as f32;
-        }
-        if corrected_direction < 0.0 {
-            corrected_direction += 2.0 * PI as f32;
-        }
+        let corrected_direction = correct_angle(direction + PI as f32 / 2.0);
 
-        if rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT) && !grabbed {
-            grabbed = true;
-            grab_offset = rl.get_mouse_position();
-        }
-        if !rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT) && grabbed {
-            grabbed = false;
-            velocity = (last_moving_mouse_position - grab_offset)
-                .normalize()
-                .scale(800.0);
-            angular_velocity = 20.0;
-        }
-
-        if grabbed {
-            position += rl.get_mouse_position() - grab_offset;
-            if (rl.get_mouse_position() - last_moving_mouse_position).length() > 0.1 {
-                last_moving_mouse_position = rl.get_mouse_position();
+        if let Some(vector) = grab.update(rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT), rl.get_mouse_position()) {
+            if rl.is_mouse_button_down(MouseButton::MOUSE_BUTTON_LEFT) {
+                position = vector;
+            } else {
+                velocity = vector;
+                angular_velocity = 20.0;
             }
-        } else {
+        }
+
+        if !grab.running() {
             pause.update(rl.get_frame_time());
             direction_change.update();
 
-            if rl.get_time() % 3.0 < 0.01 && pause.trigger(&pause_randomizer) {
+            if rl.get_time() % 3.0 < 0.01 && pause_randomizer() {
+                pause.trigger();
                 target_velocity = from_angle(target_direction).scale(0.0);
             }
-            if rl.get_time() % 3.0 < 0.01 && direction_change.trigger(&direction_change_randomizer) {
+            if rl.get_time() % 3.0 < 0.01 && direction_change_randomizer() {
+                direction_change.trigger();
                 target_direction = rand::rng().random_range(0.0..2.0 * PI) as f32;
             }
+
             // update position velocity and direction from angular velocity
-            //random direction change
+
             if !pause.running() {
                 if sliding {
                     target_velocity = from_angle(target_direction).scale(150.0);
@@ -119,20 +107,10 @@ fn main() {
                 }
             }
 
-            //random pausing
-            
-
             angular_velocity *= 0.99;
             angular_velocity += direction_pid
                 .update(from_angle(corrected_direction).angle(from_angle(target_direction)));
-
-            direction += angular_velocity * rl.get_frame_time();
-            if direction > 2.0 * PI as f32 {
-                direction -= 2.0 * PI as f32;
-            }
-            if direction < 0.0 {
-                direction += 2.0 * PI as f32;
-            }
+            direction = correct_angle(direction + angular_velocity * rl.get_frame_time());
 
             velocity *= 0.99;
             velocity += from_angle(corrected_direction).scale(
@@ -141,41 +119,28 @@ fn main() {
                     .dot(from_angle(corrected_direction))
                     * (target_velocity.length() - velocity.length()).clamp(0.0, 20.0),
             );
-
             position += velocity.scale(rl.get_frame_time());
+
             if position.x < -waddle_bounds.0.x {
                 target_direction = rand::rng().random_range(0.0..2.0 * PI) as f32;
-                if velocity.dot(Vector2::new(1.0, 0.0)) < 0.0 {
-                    velocity -= Vector2::new(1.0, 0.0)
-                        .scale(velocity.length() * velocity.angle(Vector2::new(1.0, 0.0)).cos());
-                }
+                velocity = cancel_normal(velocity, Vector2::new(1.0, 0.0));
             }
             if position.x > screen_dimensions.x - waddle_bounds.1.x {
                 target_direction = rand::rng().random_range(0.0..2.0 * PI) as f32;
-                if velocity.dot(Vector2::new(-1.0, 0.0)) < 0.0 {
-                    velocity -= Vector2::new(-1.0, 0.0)
-                        .scale(velocity.length() * velocity.angle(Vector2::new(-1.0, 0.0)).cos());
-                }
+                velocity = cancel_normal(velocity, Vector2::new(-1.0, 0.0));
             }
             if position.y < -waddle_bounds.0.y {
                 target_direction = rand::rng().random_range(0.0..2.0 * PI) as f32;
-                if velocity.dot(Vector2::new(0.0, 1.0)) < 0.0 {
-                    velocity -= Vector2::new(0.0, 1.0)
-                        .scale(velocity.length() * velocity.angle(Vector2::new(0.0, 1.0)).cos());
-                }
+                velocity = cancel_normal(velocity, Vector2::new(0.0, 1.0));
             }
             if position.y > screen_dimensions.y - waddle_bounds.1.y {
                 target_direction = rand::rng().random_range(0.0..2.0 * PI) as f32;
-                if velocity.dot(Vector2::new(0.0, -1.0)) < 0.0 {
-                    velocity -= Vector2::new(0.0, -1.0)
-                        .scale(velocity.length() * velocity.angle(Vector2::new(0.0, -1.0)).cos());
-                }
+                velocity = cancel_normal(velocity, Vector2::new(0.0, -1.0));
             }
-            position.x = position
-                .x
+
+            position.x = position.x
                 .clamp(-waddle_bounds.0.x, screen_dimensions.x - waddle_bounds.1.x);
-            position.y = position
-                .y
+            position.y = position.y
                 .clamp(-waddle_bounds.0.y, screen_dimensions.y - waddle_bounds.1.y);
 
             sprite.rotate(angular_velocity * rl.get_frame_time());
@@ -214,4 +179,23 @@ fn rotate_about_point(target: Vector2, center: Vector2, angle: f32) -> Vector2 {
 
 fn from_angle(angle: f32) -> Vector2 {
     Vector2::new(angle.cos(), angle.sin())
+}
+
+fn correct_angle(angle: f32) -> f32 {
+    if angle > 2.0 * PI as f32 {
+        return angle - 2.0 * PI as f32;
+    }
+    if angle < 0.0 {
+        return angle + 2.0 * PI as f32;
+    }
+    angle
+}
+
+fn cancel_normal(vector: Vector2, normal: Vector2) -> Vector2 {
+    if vector.dot(normal) < 0.0 {
+        vector - normal
+            .scale(vector.length() * vector.angle(normal).cos())
+    } else {
+        vector
+    }
 }
