@@ -3,14 +3,47 @@ use rand::RngExt;
 use raylib::prelude::*;
 
 // 0.0 < probability < 1.0
-pub fn build_randomizer(probability: f32) -> impl Fn() -> bool {
+// frequency in seconds
+pub fn build_randomizer(probability: f64, frequency: f64) -> impl Fn(f64) -> bool {
     let uniform = Uniform::new(0.0, 1.0).unwrap();
-    move || -> bool {
-        if uniform.sample(&mut rand::rng()) < probability {
+    move |time: f64| -> bool {
+        if time % frequency < 0.01 && uniform.sample(&mut rand::rng()) < probability {
             return true;
         }
         return false;
     }
+}
+
+//Basic template of behavior, DON'T ACTUALLY IMPLEMENT
+pub trait Behavior {
+    fn update(&mut self, should_run: bool) {
+        if !self.running() && should_run {
+            self.trigger();
+            return;
+        }
+        if self.running() && should_run {
+            self.run();
+            return;
+        }
+        if self.running() && !should_run {
+            self.stop();
+            return;
+        }
+        if !self.running() && !should_run {
+            self.stopped();
+            return;
+        }
+    }
+
+    fn trigger(&mut self);
+
+    fn run(&mut self);
+
+    fn stop(&mut self);
+
+    fn stopped(&mut self);
+
+    fn running(&self) -> bool;
 }
 
 pub struct Pause {
@@ -24,44 +57,88 @@ impl Pause {
         }
     }
 
-    pub fn trigger(&mut self) {
+    pub fn update(&mut self, should_run: bool, delta: f32) {
+        if !self.running() && should_run {
+            self.trigger();
+            return;
+        }
+        if self.running() {
+            self.run(delta);
+            return;
+        }
+        if !self.running() && !should_run {
+            self.stopped();
+            return;
+        }
+    }
+
+    fn trigger(&mut self) {
         self.timer = rand::rng().random_range(1.0..3.0);
     }
 
-    pub fn update(&mut self, delta: f32) {
+    fn run(&mut self, delta: f32) {
         self.timer -= delta;
-        if !self.running() {
-            self.stop();
-        }
     }
+
+    fn stop(&mut self) {}
+
+    fn stopped(&mut self) {
+        self.timer = 0.0;
+    }
+
 
     pub fn running(&self) -> bool {
         self.timer > 0.0
     }
-
-    pub fn stop(&mut self) {
-        self.timer = 0.0;
-    }
 }
 
 pub struct DirectionChange {
-
+    change: bool,
 }
 
 impl DirectionChange {
     pub fn new() -> Self {
-        Self {}
+        Self { change: false }
     }
 
-    pub fn trigger(&mut self) {}
+    pub fn update(&mut self, should_run: bool) {
+        if !self.running() && should_run {
+            self.trigger();
+            return;
+        }
+        if self.running() && should_run {
+            self.run();
+            return;
+        }
+        if self.running() && !should_run{
+            self.stop();
+            return;
+        }
+        if !self.running() && !should_run {
+            self.stopped();
+            return;
+        }
+    }
 
-    pub fn update(&mut self) {}
+    fn trigger(&mut self) {
+        self.change = true;
+    }
+
+    fn run(&mut self) {
+        self.change = false;
+    }
+
+    fn stop(&mut self) {
+        self.change = false;
+    }
+
+    fn stopped(&mut self) {
+        self.change = false;
+    }
 
     pub fn running(&self) -> bool {
-        false
+        self.change
     }
-
-    pub fn stop(&mut self) {}
 }
 
 pub struct Grab {
@@ -79,18 +156,18 @@ impl Grab {
         }
     }
 
-    pub fn update(&mut self, mouse_pressed: bool, mouse_position: Vector2) -> Option<Vector2> {
-        if !self.running() && mouse_pressed {
+    pub fn update(&mut self, should_run: bool, mouse_position: Vector2) -> Option<Vector2> {
+        if !self.running() && should_run {
             self.trigger(mouse_position);
             return None;
         }
-        if self.running() && mouse_pressed {
+        if self.running() && should_run {
             return Some(self.run(mouse_position));
         }
-        if self.running() && !mouse_pressed {
+        if self.running() && !should_run {
             return Some(self.stop());
         }
-        if !self.running() && !mouse_pressed {
+        if !self.running() && !should_run {
             self.stopped();
             return None;
         }
@@ -122,5 +199,59 @@ impl Grab {
 
     pub fn running(&self) -> bool {
         self.grabbed
+    }
+}
+
+pub struct Slide {
+    sliding: bool,
+    waddle_speed: f32,
+    slide_speed: f32,
+}
+
+impl Slide {
+    pub fn new(waddle_speed: f32, slide_speed: f32) -> Self {
+        Self {
+            sliding: false,
+            waddle_speed,
+            slide_speed, 
+        }
+    }
+
+    pub fn update(&mut self, should_toggle: bool) -> f32 {
+        if !self.running() && should_toggle {
+            return self.trigger();
+        }
+        if self.running() && should_toggle {
+            return self.stop();
+        }
+        if self.running() && !should_toggle {
+            return self.run();
+        }
+        if !self.running() && !should_toggle {
+            return self.stopped();
+        }
+        0.0
+    }
+
+    fn trigger(&mut self) -> f32 {
+        self.sliding = true;
+        self.slide_speed
+    }
+
+    fn run(&mut self) -> f32 {
+        self.slide_speed
+    }
+
+    fn stop(&mut self) -> f32 {
+        self.sliding = false;
+        self.waddle_speed
+    }
+
+    fn stopped(&mut self) -> f32 {
+        self.waddle_speed
+    }
+
+    pub fn running(&self) -> bool {
+        self.sliding
     }
 }
