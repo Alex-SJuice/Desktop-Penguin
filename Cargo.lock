@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "rand",
  "raylib",
+ "rsautogui",
 ]
 
 [[package]]
@@ -306,6 +307,12 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "rsautogui"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f40bfe9fb1928b01032c76be0d77320b53d0d8ff369f871c7f7e2f41ce39568"
 
 [[package]]
 name = "rustc-hash"

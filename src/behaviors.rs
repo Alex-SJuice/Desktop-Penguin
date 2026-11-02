@@ -1,6 +1,7 @@
 use rand::distr::{Distribution, Uniform};
 use rand::RngExt;
 use raylib::prelude::*;
+use std::ops::Range;
 
 // 0.0 < probability < 1.0
 // frequency in seconds
@@ -48,12 +49,14 @@ pub trait Behavior {
 
 pub struct Pause {
     timer: f32,
+    wait: Range<f32>,
 }
 
 impl Pause {
-    pub fn new() -> Self {
+    pub fn new(wait: Range<f32>) -> Self {
         Self {
             timer: 0.0,
+            wait,
         }
     }
 
@@ -73,7 +76,7 @@ impl Pause {
     }
 
     fn trigger(&mut self) {
-        self.timer = rand::rng().random_range(1.0..3.0);
+        self.timer = rand::rng().random_range(self.wait.clone());
     }
 
     fn run(&mut self, delta: f32) {
@@ -253,5 +256,65 @@ impl Slide {
 
     pub fn running(&self) -> bool {
         self.sliding
+    }
+}
+
+pub struct Investigate {
+    interest: f32,
+    interest_threshold: f32,
+    interest_rate: f32,
+    disinterest_rate: f32,
+    investigating: bool,
+}
+
+impl Investigate {
+    pub fn new(interest_threshold: f32, interest_rate: f32, disinterest_rate: f32) -> Self {
+        Self {
+            interest: 0.0,
+            interest_threshold,
+            interest_rate,
+            disinterest_rate,
+            investigating: false,
+        }
+    }
+
+    pub fn update(&mut self, distance: f32) {
+        if !self.running() && self.interest > self.interest_threshold {
+            self.trigger();
+            return;
+        }
+        if self.running() && self.interest > 0.0 {
+            self.run(distance);
+            return;
+        }
+        if self.running() && self.interest <= 0.0 {
+            self.stop();
+            return;
+        }
+        if !self.running() && self.interest <= self.interest_threshold {
+            self.stopped(distance);
+            return;
+        }
+    }
+
+    fn trigger(&mut self) {
+        self.investigating = true;
+    }
+
+    fn run(&mut self, distance: f32) {
+        self.interest -= self.disinterest_rate * (1.0 / distance).clamp(0.0, 500.0);
+    }
+
+    fn stop(&mut self) {
+        self.investigating = false;
+        self.interest = 0.0;
+    }
+
+    fn stopped(&mut self, distance: f32) {
+        self.interest += distance * self.interest_rate;
+    }
+
+    pub fn running(&self) -> bool {
+        self.investigating
     }
 }

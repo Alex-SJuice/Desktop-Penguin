@@ -144,11 +144,11 @@ impl Penguin {
 
         if self.left_foot_position.distance(self.left_foot_target) > 10.0 {
             self.left_foot_position =
-                self.left_foot_target + delta.normalize().multiply(Vector2::new(10.0, 10.0));
+                self.left_foot_target + (self.left_foot_position - self.left_foot_target).reflect(delta.normalize()).normalize().scale(10.0);
         }
         if self.right_foot_position.distance(self.right_foot_target) > 10.0 {
             self.right_foot_position =
-                self.right_foot_target + delta.normalize().multiply(Vector2::new(10.0, 10.0));
+                self.right_foot_target + (self.right_foot_position - self.right_foot_target).reflect(delta.normalize()).normalize().scale(10.0);
         }
     }
 
